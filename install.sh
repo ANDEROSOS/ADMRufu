@@ -56,20 +56,10 @@ time_reboot(){
   reboot
 }
 
+# FIX ELIMINADO - Tenia validacion de licencia
+# El repositorio 12.list ya configura correctamente Debian 12
 fixDeb12Ubu24(){
-  if ! command -v ldd &>/dev/null; then
-      echo "Error: ldd no está instalado."
-      echo "Por lo que no se puede aplicar el fix debian12/ubuntu24"
-  else
-  	_glibc=$(ldd --version|head -1|grep -o '[0-9]\+\.[0-9]\+'|sed 's/\.//g'|head -1)
-  
-  	if [[ -n $_glibc && $_glibc -ge 235 ]]; then
-  		wget -O /root/fix https://github.com/ANDEROSOS/ADMRufu/raw/master/fix && chmod 755 /root/fix && /root/fix
-  	else
-  	    echo "Glibc es inferior a 2.35 o no se pudo determinar la versión."
-  	    echo "Por lo que no se puede aplicar el fix debian12/ubuntu24"
-  	fi
-  fi
+  echo "Debian 12/Ubuntu 24 detectado - usando repositorios actualizados"
 }
 
 repo_install(){
