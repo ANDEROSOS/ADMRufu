@@ -70,37 +70,44 @@ repo_install(){
 }
 
 dependencias(){
-  # Lista de paquetes esenciales
-  soft="sudo bsdmainutils zip unzip ufw curl wget python3 python3-pip openssl screen cron iptables lsof nano at mlocate gawk grep bc jq npm nodejs socat netcat-openbsd net-tools cowsay figlet lolcat sqlite3 libsqlite3-dev locales"
+  # Lista de paquetes esenciales para Debian 12
+  soft="sudo curl wget zip unzip bsdmainutils ufw python3 python3-pip openssl screen cron iptables lsof nano at plocate gawk grep bc jq socat netcat-openbsd net-tools cowsay figlet sqlite3 libsqlite3-dev locales"
+
+  echo ""
+  echo "Instalando paquetes uno por uno..."
+  echo ""
 
   for pkg in $soft; do
-    leng="${#pkg}"
-    puntos=$(( 21 - $leng))
-    pts="."
-    for (( a = 0; a < $puntos; a++ )); do
-      pts+="."
-    done
-    msg -nazu "      instalando $pkg $(msg -ama "$pts")"
+    printf "  %-25s" "$pkg"
 
-    # Usar apt-get con DEBIAN_FRONTEND para evitar prompts
-    if DEBIAN_FRONTEND=noninteractive apt-get install -y $pkg >/dev/null 2>&1; then
-      msg -verd "INSTALL"
+    # Instalar mostrando errores si falla
+    output=$(DEBIAN_FRONTEND=noninteractive apt-get install -y $pkg 2>&1)
+
+    if [[ $? -eq 0 ]]; then
+      echo -e "\e[32mOK\e[0m"
     else
-      msg -verm2 "FAIL"
-      # Intentar con fix
-      dpkg --configure -a >/dev/null 2>&1
-      apt-get install -f -y >/dev/null 2>&1
-      # Reintentar
-      if DEBIAN_FRONTEND=noninteractive apt-get install -y $pkg >/dev/null 2>&1; then
-        del 1
-        msg -nazu "      instalando $pkg $(msg -ama "$pts")"
-        msg -verd "INSTALL"
-      fi
+      echo -e "\e[31mFAIL\e[0m"
+      # Mostrar el error
+      echo "$output" | grep -i "error\|unable\|cannot\|failed" | head -3
     fi
   done
 
+  echo ""
+
+  # Instalar nodejs y npm por separado (pueden no estar disponibles)
+  echo "Instalando nodejs/npm..."
+  apt-get install -y nodejs npm 2>/dev/null || echo "nodejs/npm no disponible, continuando..."
+
+  # Instalar lolcat via gem o pip si no está disponible
+  if ! command -v lolcat &>/dev/null; then
+    apt-get install -y ruby 2>/dev/null && gem install lolcat 2>/dev/null || echo "lolcat no instalado"
+  fi
+
   # Crear enlace python si no existe
   [[ ! -e /usr/bin/python ]] && [[ -e /usr/bin/python3 ]] && ln -sf /usr/bin/python3 /usr/bin/python
+
+  echo ""
+  echo "Dependencias procesadas."
 }
 
 verificar_arq(){
@@ -126,7 +133,6 @@ error_fun(){
 install_completa(){
   title "INSTALADOR ADMRufu LIBRE"
   print_center -ama "Instalacion completa sin reinicio intermedio"
-  print_center -ama "Este proceso puede tomar varios minutos"
   msg -bar3
   read -rp "$(msg -verm2 " Desea continuar? [S/N]:") " -e -i S opcion
   [[ "$opcion" != @(s|S) ]] && stop_install
@@ -138,37 +144,78 @@ install_completa(){
   [[ "$opcion" != @(n|N) ]] && source <(curl -sSL "https://raw.githubusercontent.com/ANDEROSOS/ADMRufu/master/online/timeZone.sh")
 
   title "INSTALADOR ADMRufu"
-  print_center -ama "Configurando repositorios..."
+  print_center -ama "Diagnosticando sistema..."
+  msg -bar3
 
-  # Limpiar cache de apt y configurar repositorios
+  # Verificar si es root
+  echo "Usuario: $(whoami)"
+  echo "UID: $(id -u)"
+
+  if [[ $(id -u) -ne 0 ]]; then
+    echo "ERROR: No eres root. Ejecuta: sudo su"
+    exit 1
+  fi
+
+  # Verificar espacio en disco
+  echo "Espacio en disco:"
+  df -h /
+
+  # Matar procesos de apt que puedan estar bloqueando
+  echo "Liberando bloqueos de apt..."
+  killall apt apt-get dpkg 2>/dev/null
+  rm -f /var/lib/dpkg/lock-frontend 2>/dev/null
+  rm -f /var/lib/dpkg/lock 2>/dev/null
+  rm -f /var/cache/apt/archives/lock 2>/dev/null
+  rm -f /var/lib/apt/lists/lock 2>/dev/null
+
+  # Configurar dpkg
+  echo "Configurando dpkg..."
+  dpkg --configure -a
+
+  # Limpiar cache de apt
+  echo "Limpiando cache apt..."
   rm -rf /var/lib/apt/lists/*
+  mkdir -p /var/lib/apt/lists/partial
 
   # Configurar repositorios para Debian 12
-  if [[ "$VERSION_ID" == "12" ]]; then
-    cat > /etc/apt/sources.list << 'EOFAPT'
+  echo "Configurando repositorios para Debian 12..."
+  cat > /etc/apt/sources.list << 'EOFAPT'
 deb http://deb.debian.org/debian/ bookworm main contrib non-free non-free-firmware
 deb http://security.debian.org/debian-security bookworm-security main contrib non-free non-free-firmware
 deb http://deb.debian.org/debian/ bookworm-updates main contrib non-free non-free-firmware
 EOFAPT
-  else
-    repo_install
-  fi
 
+  echo "Contenido de sources.list:"
+  cat /etc/apt/sources.list
+
+  msg -bar3
   title "INSTALADOR ADMRufu"
   print_center -ama "Actualizando lista de paquetes..."
-  msg -bar3
+  echo ""
 
-  # Actualizar con output visible
-  apt-get update
+  # Actualizar apt con TODO el output visible
+  apt-get update 2>&1
 
   if [[ $? -ne 0 ]]; then
-    print_center -verm "Error en apt update. Intentando fix..."
-    dpkg --configure -a
-    apt-get update --fix-missing
+    echo ""
+    echo "===== ERROR en apt update ====="
+    echo "Intentando reparar..."
+    apt-get update --fix-missing 2>&1
   fi
 
-  print_center -ama "Instalando paquetes basicos..."
-  apt-get install -y sudo curl wget
+  echo ""
+  echo "Probando instalacion de curl..."
+  apt-get install -y curl 2>&1
+
+  if [[ $? -ne 0 ]]; then
+    echo ""
+    echo "===== ERROR: No se puede instalar curl ====="
+    echo "Verificando conectividad..."
+    ping -c 2 deb.debian.org
+    echo ""
+    echo "Presiona Enter para continuar de todos modos o Ctrl+C para salir"
+    read
+  fi
 
   title "INSTALADOR ADMRufu"
   print_center -ama "$PRETTY_NAME"
@@ -178,7 +225,6 @@ EOFAPT
   msg -bar3
   print_center -azu "Removiendo paquetes obsoletos"
   apt-get autoremove -y &>/dev/null
-  [[ "$VERSION_ID" = '9' ]] && apt-get remove unscd -y &>/dev/null
   sleep 2
 }
 
