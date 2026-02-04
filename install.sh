@@ -70,44 +70,47 @@ repo_install(){
 }
 
 dependencias(){
+  # NO USAR funciones del modulo aqui para ver errores reales
+  echo ""
+  echo "============================================="
+  echo "     INSTALANDO DEPENDENCIAS (con errores)"
+  echo "============================================="
+  echo ""
+
   # Lista de paquetes esenciales para Debian 12
-  soft="sudo curl wget zip unzip bsdmainutils ufw python3 python3-pip openssl screen cron iptables lsof nano at plocate gawk grep bc jq socat netcat-openbsd net-tools cowsay figlet sqlite3 libsqlite3-dev locales"
+  paquetes="sudo curl wget zip unzip bsdmainutils ufw python3 python3-pip openssl screen cron iptables lsof nano at plocate gawk grep bc jq socat netcat-openbsd net-tools cowsay figlet sqlite3 libsqlite3-dev locales"
 
-  echo ""
-  echo "Instalando paquetes uno por uno..."
-  echo ""
+  for pkg in $paquetes; do
+    echo -n "Instalando $pkg... "
 
-  for pkg in $soft; do
-    printf "  %-25s" "$pkg"
+    # Ejecutar apt-get y capturar STDOUT y STDERR
+    resultado=$(DEBIAN_FRONTEND=noninteractive apt-get install -y "$pkg" 2>&1)
+    codigo=$?
 
-    # Instalar mostrando errores si falla
-    output=$(DEBIAN_FRONTEND=noninteractive apt-get install -y $pkg 2>&1)
-
-    if [[ $? -eq 0 ]]; then
-      echo -e "\e[32mOK\e[0m"
+    if [[ $codigo -eq 0 ]]; then
+      echo "OK"
     else
-      echo -e "\e[31mFAIL\e[0m"
-      # Mostrar el error
-      echo "$output" | grep -i "error\|unable\|cannot\|failed" | head -3
+      echo "FAIL (codigo: $codigo)"
+      echo "--- ERROR ---"
+      echo "$resultado" | tail -20
+      echo "--- FIN ERROR ---"
+      echo ""
+      echo "Presiona Enter para continuar con el siguiente paquete..."
+      read
     fi
   done
 
   echo ""
-
-  # Instalar nodejs y npm por separado (pueden no estar disponibles)
-  echo "Instalando nodejs/npm..."
-  apt-get install -y nodejs npm 2>/dev/null || echo "nodejs/npm no disponible, continuando..."
-
-  # Instalar lolcat via gem o pip si no está disponible
-  if ! command -v lolcat &>/dev/null; then
-    apt-get install -y ruby 2>/dev/null && gem install lolcat 2>/dev/null || echo "lolcat no instalado"
-  fi
+  echo "Instalando nodejs y npm..."
+  apt-get install -y nodejs npm 2>&1 || echo "nodejs/npm no disponible"
 
   # Crear enlace python si no existe
   [[ ! -e /usr/bin/python ]] && [[ -e /usr/bin/python3 ]] && ln -sf /usr/bin/python3 /usr/bin/python
 
   echo ""
   echo "Dependencias procesadas."
+  echo "Presiona Enter para continuar..."
+  read
 }
 
 verificar_arq(){
@@ -217,14 +220,18 @@ EOFAPT
     read
   fi
 
-  title "INSTALADOR ADMRufu"
-  print_center -ama "$PRETTY_NAME"
-  print_center -verd "INSTALANDO DEPENDENCIAS"
-  msg -bar3
+  echo ""
+  echo "============================================="
+  echo "Sistema: $PRETTY_NAME"
+  echo "============================================="
+  echo ""
+
+  # Llamar a dependencias SIN limpiar pantalla
   dependencias
-  msg -bar3
-  print_center -azu "Removiendo paquetes obsoletos"
-  apt-get autoremove -y &>/dev/null
+
+  echo "Removiendo paquetes obsoletos..."
+  apt-get autoremove -y 2>/dev/null
+  echo "Listo."
   sleep 2
 }
 
