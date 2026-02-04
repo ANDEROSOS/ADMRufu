@@ -70,45 +70,37 @@ repo_install(){
 }
 
 dependencias(){
-  soft="sudo bsdmainutils zip unzip ufw curl python python3 python3-pip openssl screen cron iptables lsof nano at mlocate gawk grep bc jq curl npm nodejs socat netcat netcat-traditional net-tools cowsay figlet lolcat sqlite3 libsqlite3-dev locales"
+  # Lista de paquetes esenciales
+  soft="sudo bsdmainutils zip unzip ufw curl wget python3 python3-pip openssl screen cron iptables lsof nano at mlocate gawk grep bc jq npm nodejs socat netcat-openbsd net-tools cowsay figlet lolcat sqlite3 libsqlite3-dev locales"
 
-  for install in $soft; do
-    leng="${#install}"
+  for pkg in $soft; do
+    leng="${#pkg}"
     puntos=$(( 21 - $leng))
     pts="."
     for (( a = 0; a < $puntos; a++ )); do
       pts+="."
     done
-    msg -nazu "      instalando $install $(msg -ama "$pts")"
-    if apt install $install -y &>/dev/null ; then
+    msg -nazu "      instalando $pkg $(msg -ama "$pts")"
+
+    # Usar apt-get con DEBIAN_FRONTEND para evitar prompts
+    if DEBIAN_FRONTEND=noninteractive apt-get install -y $pkg >/dev/null 2>&1; then
       msg -verd "INSTALL"
     else
       msg -verm2 "FAIL"
-      sleep 1
-      del 1
-      if [[ $install = "python" ]]; then
-        pts=$(echo ${pts:1})
-        msg -nazu "      instalando python2 $(msg -ama "$pts")"
-        if apt install python2 -y &>/dev/null ; then
-          [[ ! -e /usr/bin/python ]] && ln -s /usr/bin/python2 /usr/bin/python
-          msg -verd "INSTALL"
-        else
-          msg -verm2 "FAIL"
-        fi
-        continue
-      fi
-      print_center -ama "aplicando fix a $install"
-      dpkg --configure -a &>/dev/null
-      sleep 1
-      del 1
-      msg -nazu "      instalando $install $(msg -ama "$pts")"
-      if apt install $install -y &>/dev/null ; then
+      # Intentar con fix
+      dpkg --configure -a >/dev/null 2>&1
+      apt-get install -f -y >/dev/null 2>&1
+      # Reintentar
+      if DEBIAN_FRONTEND=noninteractive apt-get install -y $pkg >/dev/null 2>&1; then
+        del 1
+        msg -nazu "      instalando $pkg $(msg -ama "$pts")"
         msg -verd "INSTALL"
-      else
-        msg -verm2 "FAIL"
       fi
     fi
   done
+
+  # Crear enlace python si no existe
+  [[ ! -e /usr/bin/python ]] && [[ -e /usr/bin/python3 ]] && ln -sf /usr/bin/python3 /usr/bin/python
 }
 
 verificar_arq(){
@@ -147,12 +139,36 @@ install_completa(){
 
   title "INSTALADOR ADMRufu"
   print_center -ama "Configurando repositorios..."
-  repo_install
+
+  # Limpiar cache de apt y configurar repositorios
+  rm -rf /var/lib/apt/lists/*
+
+  # Configurar repositorios para Debian 12
+  if [[ "$VERSION_ID" == "12" ]]; then
+    cat > /etc/apt/sources.list << 'EOFAPT'
+deb http://deb.debian.org/debian/ bookworm main contrib non-free non-free-firmware
+deb http://security.debian.org/debian-security bookworm-security main contrib non-free non-free-firmware
+deb http://deb.debian.org/debian/ bookworm-updates main contrib non-free non-free-firmware
+EOFAPT
+  else
+    repo_install
+  fi
 
   title "INSTALADOR ADMRufu"
-  print_center -ama "Actualizando sistema..."
-  apt update -y
-  apt upgrade -y
+  print_center -ama "Actualizando lista de paquetes..."
+  msg -bar3
+
+  # Actualizar con output visible
+  apt-get update
+
+  if [[ $? -ne 0 ]]; then
+    print_center -verm "Error en apt update. Intentando fix..."
+    dpkg --configure -a
+    apt-get update --fix-missing
+  fi
+
+  print_center -ama "Instalando paquetes basicos..."
+  apt-get install -y sudo curl wget
 
   title "INSTALADOR ADMRufu"
   print_center -ama "$PRETTY_NAME"
@@ -161,8 +177,8 @@ install_completa(){
   dependencias
   msg -bar3
   print_center -azu "Removiendo paquetes obsoletos"
-  apt autoremove -y &>/dev/null
-  [[ "$VERSION_ID" = '9' ]] && apt remove unscd -y &>/dev/null
+  apt-get autoremove -y &>/dev/null
+  [[ "$VERSION_ID" = '9' ]] && apt-get remove unscd -y &>/dev/null
   sleep 2
 }
 
