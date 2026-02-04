@@ -1,9 +1,12 @@
 #!/bin/bash
 
+# ADMRufu Libre - Sin validacion de licencia
+# Fork por ANDEROSOS
+
 module="$(pwd)/module"
 rm -rf ${module}
 wget -O ${module} "https://raw.githubusercontent.com/rudi9999/Herramientas/main/module/module" &>/dev/null
-[[ ! -e ${module} ]] && exit
+[[ ! -e ${module} ]] && echo "Error descargando modulo" && exit
 chmod +x ${module} &>/dev/null
 source ${module}
 
@@ -28,26 +31,18 @@ ADM_inst="${ADMRufu}/install" && [[ ! -d ${ADM_inst} ]] && mkdir ${ADM_inst}
 tmp="${ADMRufu}/tmp" && [[ ! -d ${tmp} ]] && mkdir ${tmp}
 SCPinstal="$HOME/install"
 
-#rm -rf /etc/localtime &>/dev/null
-#ln -s /usr/share/zoneinfo/America/Argentina/Tucuman /etc/localtime &>/dev/null
-cp -f $0 ${ADMRufu}/install.sh
+cp -f $0 ${ADMRufu}/install.sh 2>/dev/null
 rm $(pwd)/$0 &> /dev/null
-# VALIDACION DE LICENCIA ELIMINADA - INSTALACION LIBRE
-# if [[ $(which install-LIC) = "" ]]; then
-#   wget -O /usr/bin/install-LIC 'https://github.com/rudi9999/Rufu-LIC/raw/main/install-LIC'; chmod +x /usr/bin/install-LIC &>/dev/null
-# fi
-# install-LIC
-# [[ $? = 1 ]] && exit
 
 stop_install(){
   title "INSTALACION CANCELADA"
   exit
- }
+}
 
 time_reboot(){
   print_center -ama "REINICIANDO VPS EN $1 SEGUNDOS"
   REBOOT_TIMEOUT="$1"
-  
+
   while [ $REBOOT_TIMEOUT -gt 0 ]; do
      print_center -ne "-$REBOOT_TIMEOUT-\r"
      sleep 1
@@ -56,21 +51,21 @@ time_reboot(){
   reboot
 }
 
-# FIX ELIMINADO - Tenia validacion de licencia
-# El repositorio 12.list ya configura correctamente Debian 12
-fixDeb12Ubu24(){
-  echo "Debian 12/Ubuntu 24 detectado - usando repositorios actualizados"
-}
-
 repo_install(){
   link="https://raw.githubusercontent.com/ANDEROSOS/ADMRufu/master/Repositorios/$VERSION_ID.list"
   case $VERSION_ID in
-    8*|9*|10*|11*|16.04*|18.04*|20.04*|20.10*|21.04*|21.10*|22.04*) [[ ! -e /etc/apt/sources.list.back ]] && cp /etc/apt/sources.list /etc/apt/sources.list.back
-                                                                    wget -O /etc/apt/sources.list ${link} &>/dev/null;;
-    12*) [[ ! -e /etc/apt/sources.list.back ]] && cp /etc/apt/sources.list /etc/apt/sources.list.back
-         wget -O /etc/apt/sources.list ${link} &>/dev/null
-         fixDeb12Ubu24;;
-    24.04*) fixDeb12Ubu24;;
+    8*|9*|10*|11*|16.04*|18.04*|20.04*|20.10*|21.04*|21.10*|22.04*)
+      [[ ! -e /etc/apt/sources.list.back ]] && cp /etc/apt/sources.list /etc/apt/sources.list.back
+      wget -O /etc/apt/sources.list ${link} &>/dev/null
+      ;;
+    12*)
+      [[ ! -e /etc/apt/sources.list.back ]] && cp /etc/apt/sources.list /etc/apt/sources.list.back
+      wget -O /etc/apt/sources.list ${link} &>/dev/null
+      echo "Debian 12 detectado - repositorios actualizados"
+      ;;
+    24.04*)
+      echo "Ubuntu 24.04 detectado"
+      ;;
   esac
 }
 
@@ -89,7 +84,7 @@ dependencias(){
       msg -verd "INSTALL"
     else
       msg -verm2 "FAIL"
-      sleep 2
+      sleep 1
       del 1
       if [[ $install = "python" ]]; then
         pts=$(echo ${pts:1})
@@ -104,7 +99,7 @@ dependencias(){
       fi
       print_center -ama "aplicando fix a $install"
       dpkg --configure -a &>/dev/null
-      sleep 2
+      sleep 1
       del 1
       msg -nazu "      instalando $install $(msg -ama "$pts")"
       if apt install $install -y &>/dev/null ; then
@@ -130,41 +125,35 @@ verificar_arq(){
 
 error_fun(){
   msg -bar3
-  #print_center -verm "ERROR de enlace VPS<-->GENERADOR"
-  print_center -verm "Falla aldescargar $1"
-  print_center -ama "Reportar con el administrador @Rufu99"
+  print_center -verm "Falla al descargar $1"
   msg -bar3
   [[ -d ${SCPinstal} ]] && rm -rf ${SCPinstal}
   exit
 }
 
-post_reboot(){
-  echo 'clear; sleep 2; /etc/ADMRufu/install.sh --continue' >> /root/.bashrc
-  title "INSTALADOR ADMRufu"
-  print_center -ama "La instalacion continuara\ndespues del reinicio!!!"
-  msg -bar
-}
-
-install_start(){
-  title "INSTALADOR ADMRufu"
-  print_center -ama "A continuacion se actualizaran los paquetes\ndel systema. Esto podria tomar tiempo,\ny requerir algunas preguntas\npropias de las actualizaciones."
+install_completa(){
+  title "INSTALADOR ADMRufu LIBRE"
+  print_center -ama "Instalacion completa sin reinicio intermedio"
+  print_center -ama "Este proceso puede tomar varios minutos"
   msg -bar3
   read -rp "$(msg -verm2 " Desea continuar? [S/N]:") " -e -i S opcion
   [[ "$opcion" != @(s|S) ]] && stop_install
+
   title "INSTALADOR ADMRufu"
-  print_center -ama 'Esto modificara la hora y fecha automatica\nsegun la Zona horaria establecida.'
+  print_center -ama 'Modificar zona horaria?'
   msg -bar
   read -rp "$(msg -ama " Modificar la zona horaria? [S/N]:") " -e -i N opcion
   [[ "$opcion" != @(n|N) ]] && source <(curl -sSL "https://raw.githubusercontent.com/ANDEROSOS/ADMRufu/master/online/timeZone.sh")
-  title "INSTALADOR ADMRufu"
-  repo_install
-  mysis=$(echo "$VERSION_ID"|cut -d '.' -f1)
-  #[[ ! $mysis = '22' ]] && add-apt-repository -y ppa:ondrej/php &>/dev/null
-  apt update -y; apt upgrade -y
-  [[ "$VERSION_ID" = '9' ]] && source <(curl -sL https://deb.nodesource.com/setup_10.x)
-}
 
-install_continue(){
+  title "INSTALADOR ADMRufu"
+  print_center -ama "Configurando repositorios..."
+  repo_install
+
+  title "INSTALADOR ADMRufu"
+  print_center -ama "Actualizando sistema..."
+  apt update -y
+  apt upgrade -y
+
   title "INSTALADOR ADMRufu"
   print_center -ama "$PRETTY_NAME"
   print_center -verd "INSTALANDO DEPENDENCIAS"
@@ -175,28 +164,29 @@ install_continue(){
   apt autoremove -y &>/dev/null
   [[ "$VERSION_ID" = '9' ]] && apt remove unscd -y &>/dev/null
   sleep 2
-  tput cuu1 && tput dl1
-  print_center -ama "si algunas de las dependencias falla!!!\nal terminar, puede intentar instalar\nla misma manualmente usando el siguiente comando\napt install nom_del_paquete"
-  enter
 }
 
 source /etc/os-release; export PRETTY_NAME
 
-while :
-do
-  case $1 in
-    -s|--start)install_start; post_reboot; time_reboot "15";;
-    -c|--continue)sed -i '/Rufu/d' /root/.bashrc
-                  install_continue
-                  break;;
-    -u|--update)install_start
-                rm -rf /etc/ADMRufu/tmp/style
-                install_continue
-                break;;
-    -t|--test)break;;
-    *)exit;;
-  esac
-done
+# Limpiar cualquier entrada anterior en bashrc que pueda causar loops
+sed -i '/ADMRufu/d' /root/.bashrc 2>/dev/null
+sed -i '/ADMRufu/d' /etc/bash.bashrc 2>/dev/null
+
+case $1 in
+  -s|--start|-u|--update)
+    install_completa
+    ;;
+  -t|--test)
+    echo "Modo test"
+    exit
+    ;;
+  *)
+    echo "Uso: $0 --start | --update"
+    echo "  --start   Instalacion nueva"
+    echo "  --update  Actualizar instalacion"
+    exit
+    ;;
+esac
 
 title "INSTALADOR ADMRufu"
 fun_ip
@@ -251,12 +241,11 @@ sleep 2; del 1
 print_center -ama 'Descarga de archivos.....'
 
 for arqx in $(echo $arch); do
- # wget --no-check-certificate -O ${SCPinstal}/${arqx} ${lisArq}/${arqx} > /dev/null 2>&1 && {
   wget -O ${SCPinstal}/${arqx} ${lisArq}/${arqx} > /dev/null 2>&1 && {
     verificar_arq "${arqx}"
   } || {
     del 1
-    print_center -verm2 'Instalacion fallida de $arqx'
+    print_center -verm2 "Instalacion fallida de $arqx"
     sleep 2s
     error_fun "${arqx}"
   }
@@ -281,10 +270,9 @@ wget --no-cache -O ${ADMRufu}/install/udp-custom "$url/udp-custom/udp-custom" &>
 wget --no-cache -O ${ADMRufu}/install/psiphon-manager "$url/psiphon/psiphon-manager" &>/dev/null; chmod +x ${ADMRufu}/install/psiphon-manager
 wget --no-cache -O ${varEntorno}/dropBear "$url/dropBear/dropBear" &>/dev/null; chmod +x ${varEntorno}/dropBear
 
-wget --no-cache -O ${varEntorno}/protocolsUDP "$url/protocolsUDP/protocolsUDP" &>/dev/null;           chmod +x ${varEntorno}/protocolsUDP 
+wget --no-cache -O ${varEntorno}/protocolsUDP "$url/protocolsUDP/protocolsUDP" &>/dev/null;           chmod +x ${varEntorno}/protocolsUDP
 wget --no-cache -O ${varEntorno}/udprequest   "$url/protocolsUDP/udprequest/udprequest" &>/dev/null;  chmod +x ${varEntorno}/udprequest
 wget --no-cache -O ${varEntorno}/udpcustom    "$url/protocolsUDP/udpcustom/udpcustom" &>/dev/null;    chmod +x ${varEntorno}/udpcustom
-#wget --no-cache -O ${varEntorno}/udp-zivpn    "$url/protocolsUDP/zivpn/udp-zivpn" &>/dev/null;        chmod +x ${varEntorno}/udp-zivpn
 wget --no-cache -O ${varEntorno}/udp-udpmod   "$url/protocolsUDP/udpmod/udp-udpmod" &>/dev/null;      chmod +x ${varEntorno}/udp-udpmod
 wget --no-cache -O ${varEntorno}/Stunnel      "$url/Stunnel/Stunnel" &>/dev/null;                     chmod +x ${varEntorno}/Stunnel
 wget --no-cache -O ${varEntorno}/Slowdns      "$url/SlowDNS/Slowdns" &>/dev/null;                     chmod +x ${varEntorno}/Slowdns
@@ -307,45 +295,53 @@ wget --no-cache -O ${varEntorno}/userHWID     "$url/user-managers/userHWID/userH
 wget --no-cache -O ${varEntorno}/userTOKEN    "$url/user-managers/userTOKEN/userTOKEN" &>/dev/null;   chmod +x ${varEntorno}/userTOKEN
 
 wget --no-cache -O ${autoStart}/limit    "$url/user-managers/limitador/limit" &>/dev/null;   chmod +x ${autoStart}/limit
-${autoStart}/limit
+${autoStart}/limit 2>/dev/null
 
 wget --no-cache -O /etc/ADMRufu/uninstall "https://github.com/ANDEROSOS/ADMRufu/raw/master/uninstall" &>/dev/null; chmod +x /etc/ADMRufu/uninstall
 
 if [[ -e $autoStart/autoStart ]]; then
-  $autoStart/autoStart -e /etc/ADMRufu/autoStart
+  $autoStart/autoStart -e /etc/ADMRufu/autoStart 2>/dev/null
 fi
 
-#profileDir="/etc/profile.d" && [[ ! -d ${profileDir} ]] && mkdir ${profileDir}
-#echo '#!/bin/bash
-#export PATH="$PATH:/etc/ADMRufu/sbin"' > /etc/profile.d/rufu.sh
-#chmod +x /etc/profile.d/rufu.sh
 rm -rf /etc/profile.d/rufu.sh
 
 sbinList=$(ls ${varEntorno})
-for i in `echo $sbinList`; do
-  ln -s ${varEntorno}/$i /usr/bin/$i
+for i in $sbinList; do
+  ln -sf ${varEntorno}/$i /usr/bin/$i 2>/dev/null
 done
 
 del 1
 
 print_center -verd 'Instalacion completa'
 sleep 2s
-rm $HOME/lista-arq
+rm -f $HOME/lista-arq
 [[ -d ${SCPinstal} ]] && rm -rf ${SCPinstal}
 rm -rf /usr/bin/menu
 rm -rf /usr/bin/adm
-ln -s /usr/bin/ADMRufu /usr/bin/menu
-ln -s /usr/bin/ADMRufu /usr/bin/adm
-ln -s /etc/ADMRufu/reseller /etc/ADMRufu/tmp/message.txt
-sed -i '/Rufu/d' /etc/bash.bashrc
-sed -i '/Rufu/d' /root/.bashrc
+ln -sf /usr/bin/ADMRufu /usr/bin/menu
+ln -sf /usr/bin/ADMRufu /usr/bin/adm
+ln -sf /etc/ADMRufu/reseller /etc/ADMRufu/tmp/message.txt 2>/dev/null
+
+# Limpiar bashrc de entradas anteriores
+sed -i '/ADMRufu/d' /etc/bash.bashrc 2>/dev/null
+sed -i '/ADMRufu/d' /root/.bashrc 2>/dev/null
+
+# Agregar solo el source del bashrc de ADMRufu
 echo '[[ -e /etc/ADMRufu/bashrc ]] && source /etc/ADMRufu/bashrc' >> /etc/bash.bashrc
-locale-gen en_US.UTF-8
-update-locale LANG=en_US.UTF-8 LANGUAGE=en LC_ALL=en_US.UTF-8
+
+locale-gen en_US.UTF-8 &>/dev/null
+update-locale LANG=en_US.UTF-8 LANGUAGE=en LC_ALL=en_US.UTF-8 &>/dev/null
 echo -e "LANG=en_US.UTF-8\nLANGUAGE=en\nLC_ALL=en_US.UTF-8" > /etc/default/locale
 [[ ! $(cat /etc/shells|grep "/bin/false") ]] && echo -e "/bin/false" >> /etc/shells
+
 clear
 title "-- ADMRufu INSTALADO --"
+print_center -verd "Instalacion completada exitosamente"
+print_center -ama "Escriba 'menu' para acceder al panel"
+msg -bar
 
-mv -f ${module} /etc/ADMRufu/module
+mv -f ${module} /etc/ADMRufu/module 2>/dev/null
+
+print_center -ama "El VPS se reiniciara en 10 segundos"
+print_center -ama "Despues del reinicio escriba: menu"
 time_reboot "10"
